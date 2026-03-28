@@ -11,20 +11,18 @@ endif()
 
 project ("Vulkan")
 
+list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_LIST_DIR}/CMake")
 find_package(Vulkan REQUIRED)
-
-set(GLFW_DIR "C:/Users/leejo/00.workspace/Git/Vulkan/glfw-3.4.bin.WIN64")
+find_package(glfw3 CONFIG REQUIRED)
+find_package(glm CONFIG REQUIRED)
 
 # 이 프로젝트의 실행 파일에 소스를 추가합니다.
 add_executable (Vulkan "Vulkan.cpp" "Vulkan.h")
 
-target_include_directories(Vulkan PRIVATE
-    "${GLFW_DIR}/include"
-    "$ENV{VULKAN_SDK}/Include"
-)
 target_link_libraries(Vulkan PRIVATE
     Vulkan::Vulkan
-    "${GLFW_DIR}/lib-vc2022/glfw3.lib"
+    glfw
+    glm::glm
 )
 
 if (CMAKE_VERSION VERSION_GREATER 3.12)

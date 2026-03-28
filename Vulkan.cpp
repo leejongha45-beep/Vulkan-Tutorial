@@ -7,6 +7,18 @@
 constexpr uint32_t WIDTH = 800;
 constexpr uint32_t HEIGHT = 600;
 
+const std::vector<const char*> validationLayers =
+{
+	"VK_LAYER_KHRONOS_validation"
+};
+
+#ifdef  NDEBUG
+const bool enableValidationLayers = false;
+#else
+const bool enableValidationLayers = true;
+#endif //  NDEBUG
+
+
 class HelloTriangleApplication
 {
 public:
@@ -124,6 +136,38 @@ private:
 				}
 			}
 		}
+	}
+
+	// 요청된 레이어가 모두 사용가능한지 확인하는 함수
+	bool checkValidationLayerSupport()
+	{
+		uint32_t layerCount;
+		vkEnumerateInstanceLayerProperties(&layerCount, nullptr);
+
+		std::vector<VkLayerProperties> availableLayers(layerCount);
+		vkEnumerateInstanceLayerProperties(&layerCount, availableLayers.data());
+
+		for (const char* layerName : validationLayers)
+		{
+			bool layerFound = false;
+
+			for (const auto& layerProperties : availableLayers)
+			{
+				const char* tempLayerName = layerProperties.layerName;
+				const int rt = std::strcmp(layerName, tempLayerName);
+
+				if (rt == 0)
+				{
+					layerFound = true;
+					break;
+				}
+			}
+
+			if (!layerFound)
+				return false;
+		}
+
+		return true;
 	}
 
 private:
