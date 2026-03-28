@@ -1,0 +1,34 @@
+﻿# CMakeList.txt: Vulkan에 대한 CMake 프로젝트, 여기에 소스를 포함하고
+# 프로젝트 특정 논리를 정의합니다.
+#
+cmake_minimum_required (VERSION 3.10)
+
+# 지원되는 경우 MSVC 컴파일러에 대해 핫 다시 로드 사용하도록 설정합니다.
+if (POLICY CMP0141)
+  cmake_policy(SET CMP0141 NEW)
+  set(CMAKE_MSVC_DEBUG_INFORMATION_FORMAT "$<IF:$<AND:$<C_COMPILER_ID:MSVC>,$<CXX_COMPILER_ID:MSVC>>,$<$<CONFIG:Debug,RelWithDebInfo>:EditAndContinue>,$<$<CONFIG:Debug,RelWithDebInfo>:ProgramDatabase>>")
+endif()
+
+project ("Vulkan")
+
+find_package(Vulkan REQUIRED)
+
+set(GLFW_DIR "C:/Users/leejo/00.workspace/Git/Vulkan/glfw-3.4.bin.WIN64")
+
+# 이 프로젝트의 실행 파일에 소스를 추가합니다.
+add_executable (Vulkan "Vulkan.cpp" "Vulkan.h")
+
+target_include_directories(Vulkan PRIVATE
+    "${GLFW_DIR}/include"
+    "$ENV{VULKAN_SDK}/Include"
+)
+target_link_libraries(Vulkan PRIVATE
+    Vulkan::Vulkan
+    "${GLFW_DIR}/lib-vc2022/glfw3.lib"
+)
+
+if (CMAKE_VERSION VERSION_GREATER 3.12)
+  set_property(TARGET Vulkan PROPERTY CXX_STANDARD 20)
+endif()
+
+# TODO: 필요한 경우 테스트를 추가하고 대상을 설치합니다.

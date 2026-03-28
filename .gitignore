@@ -1,0 +1,11 @@
+# Visual Studio
+.vs/
+out/
+*.user
+*.suo
+*.sln.docstates
+
+# CMake
+CMakeFiles/
+cmake_install.cmake
+CMakeCache.txt
