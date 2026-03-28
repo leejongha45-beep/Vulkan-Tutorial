@@ -15,14 +15,18 @@ list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_LIST_DIR}/CMake")
 find_package(Vulkan REQUIRED)
 find_package(glfw3 CONFIG REQUIRED)
 find_package(glm CONFIG REQUIRED)
+find_package(tinyobjloader CONFIG REQUIRED)
+find_package(Stb REQUIRED)
 
 # 이 프로젝트의 실행 파일에 소스를 추가합니다.
 add_executable (Vulkan "Vulkan.cpp" "Vulkan.h")
 
+target_include_directories(Vulkan PRIVATE ${Stb_INCLUDE_DIR})
 target_link_libraries(Vulkan PRIVATE
     Vulkan::Vulkan
     glfw
     glm::glm
+    tinyobjloader::tinyobjloader
 )
 
 if (CMAKE_VERSION VERSION_GREATER 3.12)
