@@ -14,6 +14,14 @@ import vulkan_hpp;
 constexpr uint32_t WIDTH  = 800;
 constexpr uint32_t HEIGHT = 600;
 
+const std::vector<char const*> validationLayers = {"VK_LAYER_KHRONOS_validation"};
+
+#ifdef NDEBUG
+constexpr bool enableValidationLayers = false;
+#else
+constexpr bool enableValidationLayers = true;
+#endif
+
 class HelloTriangleApplication
 {
 public:
@@ -122,6 +130,21 @@ private:
 				std::cout << availableExtensions[i].extensionName << std::endl;
 			}
 		}
+
+		std::vector<const char*> requiredLayers;
+		if (enableValidationLayers)
+		{
+			requiredLayers.assign(requiredLayers.begin(), requiredLayers.end());
+		}
+
+		auto layerProperties	= context.enumerateInstanceLayerProperties();
+		auto unsupportedLayerIt = std::ranges::find_if(requiredLayers, [&layerProperties](const auto& requiredLayer) {
+			return std::ranges::none_of(layerProperties, [&requiredLayer](const auto& layerProperty) {
+				return std::strcmp(layerProperty.layerName, requiredLayer) == 0;
+			});
+		});
+
+		if ()
 	}
 
 private:
