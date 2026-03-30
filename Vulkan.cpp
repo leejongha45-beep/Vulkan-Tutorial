@@ -74,27 +74,45 @@ private:
 			.engineVersion		= VK_MAKE_VERSION(1, 0, 0),
 			.apiVersion			= vk::ApiVersion14};
 
-		// GLFW 필요 확장 목록 가져오기
-		uint32_t glfwExtensionCount = 0;
-		auto glfwExtensions			= glfwGetRequiredInstanceExtensions(&glfwExtensionCount);
+		// 지원되는 레이어 계층인지 검사
+		std::vector<const char*> requiredLayers;
 
-		// GLFW 필요 확장의 Vulkan 지원 여부 확인
-		auto extensionProperties = context.enumerateInstanceExtensionProperties();
-		for (uint32_t i = 0; i < glfwExtensionCount; ++i)
+		if (enableValidationLayers)
 		{
-			if (std::ranges::none_of(
-					extensionProperties, [glfwExtension = glfwExtensions[i]](auto const& extensionProperty) {
-						return std::strcmp(extensionProperty.extensionName, glfwExtension) == 0;
-					}))
-			{
-				throw std::runtime_error("Required GLFW extension not supported: " + std::string(glfwExtensions[i]));
-			}
+			requiredLayers.assign(validationLayers.begin(), validationLayers.end());
 		}
 
-		// 확장 목록 구성
-		std::vector<const char*> extensions(glfwExtensions, glfwExtensions + glfwExtensionCount);
+		auto layerProperties	= context.enumerateInstanceLayerProperties();
+		auto unsupportedLayerIt = std::ranges::find_if(requiredLayers, [&layerProperties](const auto& requiredLayer) {
+			return std::ranges::none_of(layerProperties, [requiredLayer](const auto& layerProperty) {
+				return std::strcmp(layerProperty.layerName, requiredLayer) == 0;
+			});
+		});
+
+		if (unsupportedLayerIt != requiredLayers.end())
+		{
+			throw std::runtime_error("Required layer not supported: " + std::string(*unsupportedLayerIt));
+		}
+
+		// 지원되는 확장인지 검사
+		auto requiredExtensions = getRequiredInstanceExtensions();
+
+		auto extensionProperties = context.enumerateInstanceExtensionProperties();
+
+		auto unsupportedExtensionIt =
+			std::ranges::find_if(requiredExtensions, [&extensionProperties](const auto& requiredExtension) {
+				return std::ranges::none_of(extensionProperties, [requiredExtension](const auto& extensionProperty) {
+					return std::strcmp(extensionProperty.extensionName, requiredExtension) == 0;
+				});
+			});
+
+		if (unsupportedExtensionIt != requiredExtensions.end())
+		{
+			throw std::runtime_error("Required extension not supported: " + std::string(*unsupportedExtensionIt));
+		}
+
 #ifdef __APPLE__
-		extensions.push_back(vk::KHRPortabilityEnumerationExtensionName);
+		requiredExtensions.push_back(vk::KHRPortabilityEnumerationExtensionName);
 #endif
 
 		// 인스턴스 정보 생성
@@ -103,48 +121,25 @@ private:
 			.flags = vk::InstanceCreateFlagBits::eEnumeratePortabilityKHR,
 #endif
 			.pApplicationInfo		 = &appInfo,
-			.enabledExtensionCount	 = static_cast<uint32_t>(extensions.size()),
-			.ppEnabledExtensionNames = extensions.data()};
+			.enabledLayerCount		 = static_cast<uint32_t>(requiredLayers.size()),
+			.ppEnabledLayerNames	 = requiredLayers.data(),
+			.enabledExtensionCount	 = static_cast<uint32_t>(requiredExtensions.size()),
+			.ppEnabledExtensionNames = requiredExtensions.data(),
+
+		};
 
 		// Vulkan 인스턴스 생성 및 핸들 저장
 		instance = vk::raii::Instance(context, createInfo);
+	}
 
-		// 지원되는 확장 모듈 출력
-		auto availableExtensions = context.enumerateInstanceExtensionProperties();
-		std::cout << "available extensions:\n";
-		for (const auto& availableExtension : availableExtensions)
-		{
-			std::cout << "\t" << availableExtension.extensionName << std::endl;
-		}
+	std::vector<const char*> getRequiredInstanceExtensions()
+	{
+		uint32_t glfwExtensionCount = 0;
+		auto glfwExtensions			= glfwGetRequiredInstanceExtensions(&glfwExtensionCount);
 
-		// 실제 사용가능한 확장 출력
-		std::cout << "==========================================" << std::endl;
+		std::vector extensions(glfwExtensions, glfwExtensions + glfwExtensionCount);
 
-		for (uint32_t i = 0; i < glfwExtensionCount; ++i)
-		{
-			if (std::ranges::any_of(
-					availableExtensions, [glfwExtension = glfwExtensions[i]](const auto& availableExtension) {
-						return std::strcmp(availableExtension.extensionName, glfwExtension) == 0;
-					}))
-			{
-				std::cout << availableExtensions[i].extensionName << std::endl;
-			}
-		}
-
-		std::vector<const char*> requiredLayers;
-		if (enableValidationLayers)
-		{
-			requiredLayers.assign(requiredLayers.begin(), requiredLayers.end());
-		}
-
-		auto layerProperties	= context.enumerateInstanceLayerProperties();
-		auto unsupportedLayerIt = std::ranges::find_if(requiredLayers, [&layerProperties](const auto& requiredLayer) {
-			return std::ranges::none_of(layerProperties, [&requiredLayer](const auto& layerProperty) {
-				return std::strcmp(layerProperty.layerName, requiredLayer) == 0;
-			});
-		});
-
-		if ()
+		return extensions;
 	}
 
 private:
