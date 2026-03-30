@@ -9,8 +9,8 @@ import vulkan_hpp;
 
 #include <cstdlib>
 #include <iostream>
-#include <stdexcept>
 #include <map>
+#include <stdexcept>
 
 constexpr uint32_t WIDTH  = 800;
 constexpr uint32_t HEIGHT = 600;
@@ -212,46 +212,48 @@ private:
 
 	void pickPhysicalDevice()
 	{
-		auto physicalDevices = instance.enumeratePhysicalDevices();
+		std::vector<vk::raii::PhysicalDevice> physicalDevices = instance.enumeratePhysicalDevices();
+		const auto devIter									  = std::ranges::find_if(
+			   physicalDevices, [&](const auto& physicalDevice) { return isDeviceSuitable(physicalDevice); });
 
-		if (physicalDevices.empty())
-		{
-			throw std::runtime_error("failed to find GPUs with Vulkan support!");
-		}
-
-		std::multimap<int, vk::raii::PhysicalDevice> candidates;
-
-		for (const auto& pd : physicalDevices)
-		{
-			auto deviceProperties = pd.getProperties();
-			auto deviceFeatures	  = pd.getFeatures();
-			uint32_t score		  = 0;
-
-			// 외장 그래픽카드 높은점수 부여
-			if (deviceProperties.deviceType == vk::PhysicalDeviceType::eDiscreteGpu)
-			{
-				score += 1'000;
-			}
-
-			// 텍스처 최대 해상도를 점수에 반영
-			score += deviceProperties.limits.maxImageDimension2D;
-
-			// 지원하지 않는 앱인 경우
-			if (!deviceFeatures.geometryShader)
-			{
-				continue;
-			}
-			candidates.insert(std::make_pair(score, pd));
-		}
-
-		if (!candidates.empty() && candidates.rbegin()->first > 0)
-		{
-			physicalDevice = candidates.rbegin()->second;
-		}
-		else
+		if (devIter == physicalDevices.end())
 		{
 			throw std::runtime_error("failed to find a suitable GPU!");
 		}
+
+		physicalDevice = *devIter;
+	}
+
+	bool isDeviceSuitable(vk::raii::PhysicalDevice const& physicalDevice)
+	{
+		// 장치가 Vulkan1.3 API버전을 지원하는지 확인
+		bool supportsVulkan1_3 = physicalDevice.getProperties().apiVersion >= vk::ApiVersion13;
+
+		// 큐 패밀리중 그래픽작업을 지원하는 것이 있는지 확인
+		auto queueFamilies	  = physicalDevice.getQueueFamilyProperties();
+		bool supportsGraphics = std::ranges::any_of(
+			queueFamilies, [](const auto& qfp) { return !!(qfp.queueFlags & vk::QueueFlagBits::eGraphics); });
+
+		// 필요한 모든 장치 확장기능이 사용가능한지 확인
+		auto availableDeviceExtensions	   = physicalDevice.enumerateDeviceExtensionProperties();
+		bool supportsAllRequiredExtensions = std::ranges::all_of(
+			requiredDeviceExtension, [&availableDeviceExtensions](const auto& requiredDeviceExtension) {
+				return std::ranges::any_of(
+					availableDeviceExtensions, [requiredDeviceExtension](const auto& availableDeviceExtension) {
+						return std::strcmp(availableDeviceExtension.extensionName, requiredDeviceExtension) == 0;
+					});
+			});
+
+		// 장치가 필요한 기능을 지원하는지 확인
+		auto features = physicalDevice.template getFeatures2<
+			vk::PhysicalDeviceFeatures2, vk::PhysicalDeviceVulkan13Features,
+			vk::PhysicalDeviceExtendedDynamicStateFeaturesEXT>();
+		bool supportsRequiredFeatures =
+			features.template get<vk::PhysicalDeviceVulkan13Features>().dynamicRendering &&
+			features.template get<vk::PhysicalDeviceExtendedDynamicStateFeaturesEXT>().extendedDynamicState;
+
+		// 모두 가능하면 true
+		return supportsVulkan1_3 && supportsGraphics && supportsAllRequiredExtensions && supportsRequiredFeatures;
 	}
 
 private:
@@ -267,6 +269,8 @@ private:
 
 	// GPU 장치
 	vk::raii::PhysicalDevice physicalDevice = nullptr;
+
+	std::vector<const char*> requiredDeviceExtension = {vk::KHRSwapchainExtensionName};
 };
 
 int main()
