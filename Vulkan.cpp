@@ -185,7 +185,24 @@ private:
 		vk::DebugUtilsMessageSeverityFlagBitsEXT severity, vk::DebugUtilsMessageTypeFlagsEXT type,
 		const vk::DebugUtilsMessengerCallbackDataEXT* pCallbackData, void* pUserData)
 	{
-		std::cerr << "validation layer: type " << to_string(type) << " msg: " << pCallbackData->pMessage << std::endl;
+		const char* color = "\033[0m";
+
+		switch (severity)
+		{
+		case vk::DebugUtilsMessageSeverityFlagBitsEXT::eVerbose:
+			color = "\033[90m"; // 회색
+			break;
+		case vk::DebugUtilsMessageSeverityFlagBitsEXT::eInfo:
+			color = "\033[37m"; // 흰색
+			break;
+		case vk::DebugUtilsMessageSeverityFlagBitsEXT::eWarning:
+			color = "\033[33m"; // 노란색
+			break;
+		case vk::DebugUtilsMessageSeverityFlagBitsEXT::eError:
+			color = "\033[31m"; // 빨간색
+			break;
+		}
+		std::cerr << color << "validation layer: type " << to_string(type) << " msg: " << pCallbackData->pMessage << "\033[0m" << std::endl;
 
 		return vk::False;
 	}
