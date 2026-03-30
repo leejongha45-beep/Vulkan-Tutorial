@@ -47,7 +47,11 @@ private:
 		window = glfwCreateWindow(WIDTH, HEIGHT, "Vulkan", nullptr, nullptr);
 	}
 
-	void initVulkan() { createInstance(); }
+	void initVulkan()
+	{
+		createInstance();
+		setupDebugMessenger();
+	}
 
 	void mainLoop()
 	{
@@ -95,10 +99,8 @@ private:
 		}
 
 		// 지원되는 확장인지 검사
-		auto requiredExtensions = getRequiredInstanceExtensions();
-
+		auto requiredExtensions	 = getRequiredInstanceExtensions();
 		auto extensionProperties = context.enumerateInstanceExtensionProperties();
-
 		auto unsupportedExtensionIt =
 			std::ranges::find_if(requiredExtensions, [&extensionProperties](const auto& requiredExtension) {
 				return std::ranges::none_of(extensionProperties, [requiredExtension](const auto& extensionProperty) {
@@ -125,21 +127,67 @@ private:
 			.ppEnabledLayerNames	 = requiredLayers.data(),
 			.enabledExtensionCount	 = static_cast<uint32_t>(requiredExtensions.size()),
 			.ppEnabledExtensionNames = requiredExtensions.data(),
-
 		};
 
 		// Vulkan 인스턴스 생성 및 핸들 저장
 		instance = vk::raii::Instance(context, createInfo);
 	}
 
+	/**
+	 * 필수 인스턴스 확장 목록을 반환하는 함수
+	 */
 	std::vector<const char*> getRequiredInstanceExtensions()
 	{
 		uint32_t glfwExtensionCount = 0;
 		auto glfwExtensions			= glfwGetRequiredInstanceExtensions(&glfwExtensionCount);
 
 		std::vector extensions(glfwExtensions, glfwExtensions + glfwExtensionCount);
+		if (enableValidationLayers)
+		{
+			extensions.push_back(vk::EXTDebugUtilsExtensionName);
+		}
 
 		return extensions;
+	}
+
+	void setupDebugMessenger()
+	{
+		if (!enableValidationLayers)
+			return;
+
+		vk::DebugUtilsMessageSeverityFlagsEXT severityFlags(
+			vk::DebugUtilsMessageSeverityFlagBitsEXT::eWarning | vk::DebugUtilsMessageSeverityFlagBitsEXT::eError);
+		vk::DebugUtilsMessageTypeFlagsEXT messageTypeFlags(
+			vk::DebugUtilsMessageTypeFlagBitsEXT::ePerformance | vk::DebugUtilsMessageTypeFlagBitsEXT::eValidation);
+		vk::DebugUtilsMessengerCreateInfoEXT debugUtilsMessengerCreateInfoEXT{
+			.messageSeverity = severityFlags, .messageType = messageTypeFlags, .pfnUserCallback = &debugCallback};
+
+		debugMessenger = instance.createDebugUtilsMessengerEXT(debugUtilsMessengerCreateInfoEXT);
+	}
+
+	/**
+	 * @vk::DebugUtilsMessageSeverityFlagBitsEXT
+	 * vk::DebugUtilsMessageSeverityFlagBitsEXT::eVerbose : Vulkan 구성요소에서 보내는 진단 메세지
+	 * vk::DebugUtilsMessageSeverityFlagBitsEXT::eInfo : 리소스 생성과 같은 정보성 메세지
+	 * vk::DebugUtilsMessageSeverityFlagBitsEXT::eWarning : 오류는 아니지만 애플리케이션의 버그일 가능성이 매우 높은
+	 * 동작에 대한 메시지 vk::DebugUtilsMessageSeverityFlagBitsEXT::eError : 유효하지않으며 충돌을 유발할 수 있는 동작에
+	 * 대한 메시지
+	 * @vk::DebugUtilsMessageTypeFlagBitsEXT
+	 * vk::DebugUtilsMessageTypeFlagBitsEXT::eGeneral : 사양이나 성능과는 무관한 어떤사건이 발생
+	 * vk::DebugUtilsMessageTypeFlagBitsEXT::eValidation : 사양을 위반하는 상황이 발생했거나 오류 가능성을 시사하는
+	 * 상황이 발생 vk::DebugUtilsMessageTypeFlagBitsEXT::ePerformance : Vulkan의 최적화되지 않은 사용 가능성
+	 * @vk::DeubgUtilsMessengerCallbackDataEXT
+	 * vk::DeubgUtilsMessengerCallbackDataEXT::pMessage : 디버그 메시지는 null로 끝나는 문자열
+	 * vk::DeubgUtilsMessengerCallbackDataEXT::pObjects : 메시지와 관련된 Vulkan 객체 핸들 배열
+	 * vk::DeubgUtilsMessengerCallbackDataEXT::objectCount : 배열에 있는 객체의 개수
+	 */
+	static VKAPI_ATTR vk::Bool32 VKAPI_CALL debugCallback(
+		vk::DebugUtilsMessageSeverityFlagBitsEXT severity, vk::DebugUtilsMessageTypeFlagsEXT type,
+		const vk::DebugUtilsMessengerCallbackDataEXT* pCallbackData, void* pUserData)
+	{
+		std::cerr << "validation layer: type " << to_string(type) << " msg: " << pCallbackData->pMessage << std::endl;
+
+		return vk::False;
 	}
 
 private:
@@ -150,6 +198,8 @@ private:
 
 	// Instance Handle
 	vk::raii::Instance instance = nullptr;
+
+	vk::raii::DebugUtilsMessengerEXT debugMessenger = nullptr;
 };
 
 int main()
