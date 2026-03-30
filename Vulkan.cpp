@@ -10,6 +10,7 @@ import vulkan_hpp;
 #include <algorithm>
 #include <cstdint>
 #include <cstdlib>
+#include <fstream>
 #include <iostream>
 #include <limits>
 #include <map>
@@ -60,6 +61,7 @@ private:
 		createLogicalDevice();
 		createSwapChain();
 		createImageViews();
+		createGraphicsPipeline();
 	}
 
 	void mainLoop()
@@ -294,9 +296,14 @@ private:
 
 		// Vulkan 1.3 기능 쿼리 (기능 구조체 체인 생성)
 		vk::StructureChain<
-			vk::PhysicalDeviceFeatures2, vk::PhysicalDeviceVulkan13Features,
+			vk::PhysicalDeviceFeatures2, vk::PhysicalDeviceVulkan11Features, vk::PhysicalDeviceVulkan13Features,
 			vk::PhysicalDeviceExtendedDynamicStateFeaturesEXT>
-			featureChain = {{}, {.dynamicRendering = true}, {.extendedDynamicState = true}};
+			featureChain = {
+				{},								// vk::PhysicalDeviceFeatures2
+				{.shaderDrawParameters = true}, // vk::PhysicalDeviceVulkan11Features
+				{.dynamicRendering = true},		// vk::PhysicalDeviceVulkan13Features
+				{.extendedDynamicState = true}	// vk::PhysicalDeviceExtendedDynamicStateFeaturesEXT
+			};
 
 		// 큐 정보 생성
 		float queuePriority = 0.5f;
@@ -422,6 +429,47 @@ private:
 			imageViewCreateInfo.image = image;
 			swapChainImageViews.emplace_back(device, imageViewCreateInfo);
 		}
+	}
+
+	void createGraphicsPipeline()
+	{
+		vk::raii::ShaderModule shaderModule = createShaerModule(
+			readFile("C:/Users/leejo/00.workspace/Git/Vulkan/Practice/2026.03.28/Vulkan/shader/slang.spv"));
+
+		vk::PipelineShaderStageCreateInfo vertShaderStageInfo{
+			.stage = vk::ShaderStageFlagBits::eVertex, .module = shaderModule, .pName = "vertMain"};
+		vk::PipelineShaderStageCreateInfo fragShaerStageInfo{
+			.stage = vk::ShaderStageFlagBits::eFragment, .module = shaderModule, .pName = "frageMain"};
+		vk::PipelineShaderStageCreateInfo shaderStages[] = {vertShaderStageInfo, fragShaerStageInfo};
+	}
+
+	static std::vector<char> readFile(const std::string& filename)
+	{
+		std::ifstream file(filename, std::ios::ate | std::ios::binary);
+
+		if (!file.is_open())
+		{
+			throw std::runtime_error("failed to open file!");
+		}
+
+		std::vector<char> buffer(file.tellg());
+
+		file.seekg(0, std::ios::beg);
+		file.read(buffer.data(), static_cast<std::streamsize>(buffer.size()));
+
+		file.close();
+
+		return buffer;
+	}
+
+	[[nodiscard]] vk::raii::ShaderModule createShaerModule(const std::vector<char>& code) const
+	{
+		vk::ShaderModuleCreateInfo createInfo{
+			.codeSize = code.size() * sizeof(char), .pCode = reinterpret_cast<const uint32_t*>(code.data())};
+
+		vk::raii::ShaderModule shaderModule{device, createInfo};
+
+		return shaderModule;
 	}
 
 private:
