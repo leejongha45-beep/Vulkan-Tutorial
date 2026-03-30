@@ -7,8 +7,11 @@ import vulkan_hpp;
 #define GLFW_INCLUDE_VULKAN
 #include <GLFW/glfw3.h>
 
+#include <algorithm>
+#include <cstdint>
 #include <cstdlib>
 #include <iostream>
+#include <limits>
 #include <map>
 #include <stdexcept>
 
@@ -52,8 +55,10 @@ private:
 	{
 		createInstance();
 		setupDebugMessenger();
+		createSurface();
 		pickPhysicalDevice();
 		createLogicalDevice();
+		createSwapChain();
 	}
 
 	void mainLoop()
@@ -211,6 +216,16 @@ private:
 		return vk::False;
 	}
 
+	void createSurface()
+	{
+		VkSurfaceKHR _surface;
+		if (glfwCreateWindowSurface(*instance, window, nullptr, &_surface) != 0)
+		{
+			throw std::runtime_error("failed to create window surface!");
+		}
+		surface = vk::raii::SurfaceKHR(instance, _surface);
+	}
+
 	void pickPhysicalDevice()
 	{
 		std::vector<vk::raii::PhysicalDevice> physicalDevices = instance.enumeratePhysicalDevices();
@@ -261,13 +276,20 @@ private:
 	{
 		// 그래픽을 지원하는 첫번쨰 큐 패밀리의 인덱스를 찾기
 		std::vector<vk::QueueFamilyProperties> queueFamilyProperties = physicalDevice.getQueueFamilyProperties();
-
-		// 그래픽을 지원하는 queueFamilyPropertise의 첫 번쨰 인덱스 가져오기
-		auto graphicsQueueFamilyProperty = std::ranges::find_if(queueFamilyProperties, [](const auto& qfp) {
-			return (qfp.queueFlags & vk::QueueFlagBits::eGraphics) != static_cast<vk::QueueFlags>(0);
-		});
-		auto graphicsIndex =
-			static_cast<uint32_t>(std::distance(queueFamilyProperties.begin(), graphicsQueueFamilyProperty));
+		uint32_t queueIndex											 = ~0;
+		for (uint32_t qfpIndex = 0; qfpIndex < queueFamilyProperties.size(); qfpIndex++)
+		{
+			if ((queueFamilyProperties[qfpIndex].queueFlags & vk::QueueFlagBits::eGraphics) &&
+				physicalDevice.getSurfaceSupportKHR(qfpIndex, *surface))
+			{
+				queueIndex = qfpIndex;
+				break;
+			}
+		}
+		if (queueIndex == ~0)
+		{
+			throw std::runtime_error("Could not find a queue for graphics and present -> terminating");
+		}
 
 		// Vulkan 1.3 기능 쿼리 (기능 구조체 체인 생성)
 		vk::StructureChain<
@@ -278,7 +300,7 @@ private:
 		// 큐 정보 생성
 		float queuePriority = 0.5f;
 		vk::DeviceQueueCreateInfo deviceQueueCreateInfo{
-			.queueFamilyIndex = graphicsIndex, .queueCount = 1, .pQueuePriorities = &queuePriority};
+			.queueFamilyIndex = queueIndex, .queueCount = 1, .pQueuePriorities = &queuePriority};
 
 		// 논리 장치 정보 생성
 		vk::DeviceCreateInfo deviceCreateInfo{
@@ -290,7 +312,94 @@ private:
 
 		// 큐, 논리장치 생성
 		device		  = vk::raii::Device(physicalDevice, deviceCreateInfo);
-		graphicsQueue = vk::raii::Queue(device, graphicsIndex, 0);
+		graphicsQueue = vk::raii::Queue(device, queueIndex, 0);
+	}
+
+	void createSwapChain()
+	{
+		// 기본 표면 기능 조회 (스왑체인의 최소/최대 이미지 수, 이미지의 최소/최대 너비 및 높이)
+		vk::SurfaceCapabilitiesKHR surfaceCapabilities = physicalDevice.getSurfaceCapabilitiesKHR(*surface);
+		swapChainExtent								   = chooseSwapExtent(surfaceCapabilities);
+		uint32_t minImageCount						   = chooseSwapMinImageCount(surfaceCapabilities);
+
+		// 지원되는 surface 형식 조회 (픽셀 형식, 색 공간)
+		std::vector<vk::SurfaceFormatKHR> availableFormats = physicalDevice.getSurfaceFormatsKHR(*surface);
+		swapChainSurfaceFormat							   = chooseSwapSurfaceFormat(availableFormats);
+
+		// 프레전테이션 모드 조회
+		std::vector<vk::PresentModeKHR> availablePresentModes = physicalDevice.getSurfacePresentModesKHR(*surface);
+		vk::PresentModeKHR presentMode						  = choosseSwapPresentMode(availablePresentModes);
+
+		vk::SwapchainCreateInfoKHR swapChainCreateInfo{
+			.surface		  = *surface,
+			.minImageCount	  = minImageCount,
+			.imageFormat	  = swapChainSurfaceFormat.format,
+			.imageColorSpace  = swapChainSurfaceFormat.colorSpace,
+			.imageExtent	  = swapChainExtent,
+			.imageArrayLayers = 1, // 각 이미지가 구성하는 레이어 수 지정
+			.imageUsage		  = vk::ImageUsageFlagBits::eColorAttachment, // 스왑 체인에 있는 이미지를 어떤 작업에 사용할지 지정
+			.imageSharingMode = vk::SharingMode::eExclusive, // 여러 큐 패밀리에서 사용될 수 있는 스왑 체인 이미지를 처리하는 방법을 지정
+			.preTransform	  = surfaceCapabilities.currentTransform, // 스왑 체인의 이미지에 특정 변환을 적용하도록 지정 할수 있게함
+			.compositeAlpha	  = vk::CompositeAlphaFlagBitsKHR::eOpaque, // 창 시스템 내의 다른창과 블랜딩할 떄 알파 채널을 사용할지 여부를 지정
+			.presentMode	  = presentMode,
+			.clipped		  = true};
+
+		swapChainCreateInfo.oldSwapchain = nullptr;
+
+		swapChain = vk::raii::SwapchainKHR(device, swapChainCreateInfo);
+		swapChainImages = swapChain.getImages();
+	}
+	// 표면형식 (색심도)
+	vk::SurfaceFormatKHR chooseSwapSurfaceFormat(std::vector<vk::SurfaceFormatKHR> const& availableFormats)
+	{
+		const auto formatIt = std::ranges::find_if(availableFormats, [](const auto format) {
+			return format.format == vk::Format::eB8G8R8A8Srgb && format.colorSpace == vk::ColorSpaceKHR::eSrgbNonlinear;
+		});
+
+		return formatIt != availableFormats.end() ? *formatIt : availableFormats[0];
+	}
+
+	// 프레젠테이션 모드 (화면에 이미지를 교체하는 조건)
+	vk::PresentModeKHR choosseSwapPresentMode(std::vector<vk::PresentModeKHR> const& availablePresentModes)
+	{
+		assert(std::ranges::any_of(availablePresentModes, [](auto presentMode) {
+			return presentMode == vk::PresentModeKHR::eFifo;
+		}));
+
+		return std::ranges::any_of(
+				   availablePresentModes,
+				   [](const vk::PresentModeKHR value) { return vk::PresentModeKHR::eMailbox == value; })
+				   ? vk::PresentModeKHR::eMailbox
+				   : vk::PresentModeKHR::eFifo;
+	}
+
+	// 스왑 범위 (스왑체인 내 이미지 해상도)
+	vk::Extent2D chooseSwapExtent(vk::SurfaceCapabilitiesKHR const& capabilities)
+	{
+		// 윈도우 계열 (스왑체인 이미지 크기 == 창크기)
+		if (capabilities.currentExtent.width != std::numeric_limits<uint32_t>::max())
+		{
+			return capabilities.currentExtent;
+		}
+
+		// 맥북 레티나 계열 (스왑체인 이미지크기 != 창크기)
+		int width, height;
+		glfwGetFramebufferSize(window, &width, &height);
+
+		return {
+			std::clamp<uint32_t>(width, capabilities.minImageExtent.width, capabilities.maxImageExtent.width),
+			std::clamp<uint32_t>(height, capabilities.minImageExtent.height, capabilities.maxImageExtent.height)};
+	}
+
+	// 스왑체인에 포함될 이미지의 갯수가 최대상한을 초과하지않게 제한
+	uint32_t chooseSwapMinImageCount(vk::SurfaceCapabilitiesKHR const& surfaceCapabilites)
+	{
+		auto minImageCount = std::max(3u, surfaceCapabilites.minImageCount);
+		if ((0 < surfaceCapabilites.maxImageCount) && (surfaceCapabilites.maxImageCount < minImageCount))
+		{
+			minImageCount = surfaceCapabilites.maxImageCount;
+		}
+		return minImageCount;
 	}
 
 private:
@@ -304,6 +413,8 @@ private:
 
 	vk::raii::DebugUtilsMessengerEXT debugMessenger = nullptr;
 
+	vk::raii::SurfaceKHR surface = nullptr;
+
 	// GPU 장치
 	vk::raii::PhysicalDevice physicalDevice = nullptr;
 
@@ -311,6 +422,12 @@ private:
 
 	vk::raii::Device device		  = nullptr;
 	vk::raii::Queue graphicsQueue = nullptr;
+
+	vk::raii::SwapchainKHR swapChain = nullptr;
+	std::vector<vk::Image> swapChainImages;
+	vk::SurfaceFormatKHR swapChainSurfaceFormat;
+	vk::Extent2D swapChainExtent;
+	std::vector<vk::raii::ImageView> swapChainImageViews;
 };
 
 int main()
