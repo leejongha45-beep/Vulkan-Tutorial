@@ -10,6 +10,7 @@ import vulkan_hpp;
 #include <cstdlib>
 #include <iostream>
 #include <stdexcept>
+#include <map>
 
 constexpr uint32_t WIDTH  = 800;
 constexpr uint32_t HEIGHT = 600;
@@ -51,6 +52,7 @@ private:
 	{
 		createInstance();
 		setupDebugMessenger();
+		pickPhysicalDevice();
 	}
 
 	void mainLoop()
@@ -202,9 +204,54 @@ private:
 			color = "\033[31m"; // 빨간색
 			break;
 		}
-		std::cerr << color << "validation layer: type " << to_string(type) << " msg: " << pCallbackData->pMessage << "\033[0m" << std::endl;
+		std::cerr << color << "validation layer: type " << to_string(type) << " msg: " << pCallbackData->pMessage
+				  << "\033[0m" << std::endl;
 
 		return vk::False;
+	}
+
+	void pickPhysicalDevice()
+	{
+		auto physicalDevices = instance.enumeratePhysicalDevices();
+
+		if (physicalDevices.empty())
+		{
+			throw std::runtime_error("failed to find GPUs with Vulkan support!");
+		}
+
+		std::multimap<int, vk::raii::PhysicalDevice> candidates;
+
+		for (const auto& pd : physicalDevices)
+		{
+			auto deviceProperties = pd.getProperties();
+			auto deviceFeatures	  = pd.getFeatures();
+			uint32_t score		  = 0;
+
+			// 외장 그래픽카드 높은점수 부여
+			if (deviceProperties.deviceType == vk::PhysicalDeviceType::eDiscreteGpu)
+			{
+				score += 1'000;
+			}
+
+			// 텍스처 최대 해상도를 점수에 반영
+			score += deviceProperties.limits.maxImageDimension2D;
+
+			// 지원하지 않는 앱인 경우
+			if (!deviceFeatures.geometryShader)
+			{
+				continue;
+			}
+			candidates.insert(std::make_pair(score, pd));
+		}
+
+		if (!candidates.empty() && candidates.rbegin()->first > 0)
+		{
+			physicalDevice = candidates.rbegin()->second;
+		}
+		else
+		{
+			throw std::runtime_error("failed to find a suitable GPU!");
+		}
 	}
 
 private:
@@ -217,6 +264,9 @@ private:
 	vk::raii::Instance instance = nullptr;
 
 	vk::raii::DebugUtilsMessengerEXT debugMessenger = nullptr;
+
+	// GPU 장치
+	vk::raii::PhysicalDevice physicalDevice = nullptr;
 };
 
 int main()
