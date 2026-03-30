@@ -53,6 +53,7 @@ private:
 		createInstance();
 		setupDebugMessenger();
 		pickPhysicalDevice();
+		createLogicalDevice();
 	}
 
 	void mainLoop()
@@ -256,6 +257,42 @@ private:
 		return supportsVulkan1_3 && supportsGraphics && supportsAllRequiredExtensions && supportsRequiredFeatures;
 	}
 
+	void createLogicalDevice()
+	{
+		// 그래픽을 지원하는 첫번쨰 큐 패밀리의 인덱스를 찾기
+		std::vector<vk::QueueFamilyProperties> queueFamilyProperties = physicalDevice.getQueueFamilyProperties();
+
+		// 그래픽을 지원하는 queueFamilyPropertise의 첫 번쨰 인덱스 가져오기
+		auto graphicsQueueFamilyProperty = std::ranges::find_if(queueFamilyProperties, [](const auto& qfp) {
+			return (qfp.queueFlags & vk::QueueFlagBits::eGraphics) != static_cast<vk::QueueFlags>(0);
+		});
+		auto graphicsIndex =
+			static_cast<uint32_t>(std::distance(queueFamilyProperties.begin(), graphicsQueueFamilyProperty));
+
+		// Vulkan 1.3 기능 쿼리 (기능 구조체 체인 생성)
+		vk::StructureChain<
+			vk::PhysicalDeviceFeatures2, vk::PhysicalDeviceVulkan13Features,
+			vk::PhysicalDeviceExtendedDynamicStateFeaturesEXT>
+			featureChain = {{}, {.dynamicRendering = true}, {.extendedDynamicState = true}};
+
+		// 큐 정보 생성
+		float queuePriority = 0.5f;
+		vk::DeviceQueueCreateInfo deviceQueueCreateInfo{
+			.queueFamilyIndex = graphicsIndex, .queueCount = 1, .pQueuePriorities = &queuePriority};
+
+		// 논리 장치 정보 생성
+		vk::DeviceCreateInfo deviceCreateInfo{
+			.pNext					 = &featureChain.get<vk::PhysicalDeviceFeatures2>(),
+			.queueCreateInfoCount	 = 1,
+			.pQueueCreateInfos		 = &deviceQueueCreateInfo,
+			.enabledExtensionCount	 = static_cast<uint32_t>(requiredDeviceExtension.size()),
+			.ppEnabledExtensionNames = requiredDeviceExtension.data()};
+
+		// 큐, 논리장치 생성
+		device		  = vk::raii::Device(physicalDevice, deviceCreateInfo);
+		graphicsQueue = vk::raii::Queue(device, graphicsIndex, 0);
+	}
+
 private:
 	GLFWwindow* window;
 
@@ -271,6 +308,9 @@ private:
 	vk::raii::PhysicalDevice physicalDevice = nullptr;
 
 	std::vector<const char*> requiredDeviceExtension = {vk::KHRSwapchainExtensionName};
+
+	vk::raii::Device device		  = nullptr;
+	vk::raii::Queue graphicsQueue = nullptr;
 };
 
 int main()
