@@ -69,4 +69,10 @@ endif()
 
 set_property(TARGET Vulkan PROPERTY CXX_STANDARD 20)
 
+# MSVC 코드 분석 비활성화
+if (MSVC)
+  set_target_properties(Vulkan PROPERTIES VS_GLOBAL_EnableMicrosoftCodeAnalysis false)
+  set_target_properties(Vulkan PROPERTIES VS_GLOBAL_RunCodeAnalysis false)
+endif()
+
 # TODO: 필요한 경우 테스트를 추가하고 대상을 설치합니다.

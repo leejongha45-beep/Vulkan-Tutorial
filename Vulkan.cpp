@@ -59,6 +59,7 @@ private:
 		pickPhysicalDevice();
 		createLogicalDevice();
 		createSwapChain();
+		createImageViews();
 	}
 
 	void mainLoop()
@@ -337,20 +338,24 @@ private:
 			.imageColorSpace  = swapChainSurfaceFormat.colorSpace,
 			.imageExtent	  = swapChainExtent,
 			.imageArrayLayers = 1, // 각 이미지가 구성하는 레이어 수 지정
-			.imageUsage		  = vk::ImageUsageFlagBits::eColorAttachment, // 스왑 체인에 있는 이미지를 어떤 작업에 사용할지 지정
-			.imageSharingMode = vk::SharingMode::eExclusive, // 여러 큐 패밀리에서 사용될 수 있는 스왑 체인 이미지를 처리하는 방법을 지정
-			.preTransform	  = surfaceCapabilities.currentTransform, // 스왑 체인의 이미지에 특정 변환을 적용하도록 지정 할수 있게함
-			.compositeAlpha	  = vk::CompositeAlphaFlagBitsKHR::eOpaque, // 창 시스템 내의 다른창과 블랜딩할 떄 알파 채널을 사용할지 여부를 지정
-			.presentMode	  = presentMode,
-			.clipped		  = true};
+			.imageUsage =
+				vk::ImageUsageFlagBits::eColorAttachment,	 // 스왑 체인에 있는 이미지를 어떤 작업에 사용할지 지정
+			.imageSharingMode = vk::SharingMode::eExclusive, // 여러 큐 패밀리에서 사용될 수 있는 스왑 체인 이미지를
+															 // 처리하는 방법을 지정
+			.preTransform =
+				surfaceCapabilities.currentTransform, // 스왑 체인의 이미지에 특정 변환을 적용하도록 지정 할수 있게함
+			.compositeAlpha = vk::CompositeAlphaFlagBitsKHR::eOpaque, // 창 시스템 내의 다른창과 블랜딩할 떄 알파 채널을
+																	  // 사용할지 여부를 지정
+			.presentMode = presentMode,
+			.clipped	 = true};
 
 		swapChainCreateInfo.oldSwapchain = nullptr;
 
-		swapChain = vk::raii::SwapchainKHR(device, swapChainCreateInfo);
+		swapChain		= vk::raii::SwapchainKHR(device, swapChainCreateInfo);
 		swapChainImages = swapChain.getImages();
 	}
 	// 표면형식 (색심도)
-	vk::SurfaceFormatKHR chooseSwapSurfaceFormat(std::vector<vk::SurfaceFormatKHR> const& availableFormats)
+	static vk::SurfaceFormatKHR chooseSwapSurfaceFormat(std::vector<vk::SurfaceFormatKHR> const& availableFormats)
 	{
 		const auto formatIt = std::ranges::find_if(availableFormats, [](const auto format) {
 			return format.format == vk::Format::eB8G8R8A8Srgb && format.colorSpace == vk::ColorSpaceKHR::eSrgbNonlinear;
@@ -360,7 +365,7 @@ private:
 	}
 
 	// 프레젠테이션 모드 (화면에 이미지를 교체하는 조건)
-	vk::PresentModeKHR choosseSwapPresentMode(std::vector<vk::PresentModeKHR> const& availablePresentModes)
+	static vk::PresentModeKHR choosseSwapPresentMode(std::vector<vk::PresentModeKHR> const& availablePresentModes)
 	{
 		assert(std::ranges::any_of(availablePresentModes, [](auto presentMode) {
 			return presentMode == vk::PresentModeKHR::eFifo;
@@ -392,7 +397,7 @@ private:
 	}
 
 	// 스왑체인에 포함될 이미지의 갯수가 최대상한을 초과하지않게 제한
-	uint32_t chooseSwapMinImageCount(vk::SurfaceCapabilitiesKHR const& surfaceCapabilites)
+	static uint32_t chooseSwapMinImageCount(vk::SurfaceCapabilitiesKHR const& surfaceCapabilites)
 	{
 		auto minImageCount = std::max(3u, surfaceCapabilites.minImageCount);
 		if ((0 < surfaceCapabilites.maxImageCount) && (surfaceCapabilites.maxImageCount < minImageCount))
@@ -400,6 +405,23 @@ private:
 			minImageCount = surfaceCapabilites.maxImageCount;
 		}
 		return minImageCount;
+	}
+
+	void createImageViews()
+	{
+		assert(swapChainImageViews.empty());
+
+		// 이미지 뷰 정보 생성
+		vk::ImageViewCreateInfo imageViewCreateInfo{
+			.viewType		  = vk::ImageViewType::e2D,
+			.format			  = swapChainSurfaceFormat.format,
+			.subresourceRange = {vk::ImageAspectFlagBits::eColor, 0, 1, 0, 1}};
+
+		for (auto& image : swapChainImages)
+		{
+			imageViewCreateInfo.image = image;
+			swapChainImageViews.emplace_back(device, imageViewCreateInfo);
+		}
 	}
 
 private:
