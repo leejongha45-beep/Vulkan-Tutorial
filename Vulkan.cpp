@@ -483,6 +483,44 @@ private:
 		vk::PipelineLayoutCreateInfo pipelineLayoutInfo{.setLayoutCount = 0, .pushConstantRangeCount = 0};
 		pipelineLayout = vk::raii::PipelineLayout(device, pipelineLayoutInfo);
 
+		// 파이프라인 렌더링 정보생성 (정적)
+		//vk::PipelineRenderingCreateInfo pipelineRenderingCreateInfo{
+		//	.colorAttachmentCount = 1, .pColorAttachmentFormats = &swapChainSurfaceFormat.format};
+
+		//vk::GraphicsPipelineCreateInfo pipelineInfo{
+		//	.pNext				 = &pipelineRenderingCreateInfo,
+		//	.stageCount			 = 2,
+		//	.pStages			 = shaderStages,
+		//	.pVertexInputState	 = &vertexInputInfo,
+		//	.pInputAssemblyState = &inputAssembly,
+		//	.pViewportState		 = &viewportState,
+		//	.pRasterizationState = &rasterizer,
+		//	.pMultisampleState	 = &multisampling,
+		//	.pColorBlendState	 = &colorBlending,
+		//	.pDynamicState		 = &dynamicState,
+		//	.layout				 = pipelineLayout,
+		//	.renderPass			 = nullptr};
+
+		//pipelineInfo.basePipelineHandle = VK_NULL_HANDLE;
+		//pipelineInfo.basePipelineIndex	= -1;
+
+		// 파이프라인 렌더링 정보 생성 (동적)
+		vk::StructureChain<vk::GraphicsPipelineCreateInfo, vk::PipelineRenderingCreateInfo> pipelineCreateInfoChain = {
+			{.stageCount		  = 2,
+			 .pStages			  = shaderStages,
+			 .pVertexInputState	  = &vertexInputInfo,
+			 .pInputAssemblyState = &inputAssembly,
+			 .pViewportState	  = &viewportState,
+			 .pRasterizationState = &rasterizer,
+			 .pMultisampleState	  = &multisampling,
+			 .pColorBlendState	  = &colorBlending,
+			 .pDynamicState		  = &dynamicState,
+			 .layout			  = pipelineLayout,
+			 .renderPass		  = nullptr},
+			{.colorAttachmentCount = 1, .pColorAttachmentFormats = &swapChainSurfaceFormat.format}};
+
+		graphicsPipeline =
+			vk::raii::Pipeline(device, nullptr, pipelineCreateInfoChain.get<vk::GraphicsPipelineCreateInfo>());
 	}
 
 	static std::vector<char> readFile(const std::string& filename)
@@ -542,6 +580,7 @@ private:
 	std::vector<vk::raii::ImageView> swapChainImageViews;
 
 	vk::raii::PipelineLayout pipelineLayout = nullptr;
+	vk::raii::Pipeline graphicsPipeline		= nullptr;
 };
 
 int main()
