@@ -433,14 +433,56 @@ private:
 
 	void createGraphicsPipeline()
 	{
-		vk::raii::ShaderModule shaderModule = createShaerModule(
+		vk::raii::ShaderModule shaderModule = createShaderModule(
 			readFile("C:/Users/leejo/00.workspace/Git/Vulkan/Practice/2026.03.28/Vulkan/shader/slang.spv"));
 
+		// 셰이더 정보 입력
 		vk::PipelineShaderStageCreateInfo vertShaderStageInfo{
 			.stage = vk::ShaderStageFlagBits::eVertex, .module = shaderModule, .pName = "vertMain"};
 		vk::PipelineShaderStageCreateInfo fragShaerStageInfo{
-			.stage = vk::ShaderStageFlagBits::eFragment, .module = shaderModule, .pName = "frageMain"};
+			.stage = vk::ShaderStageFlagBits::eFragment, .module = shaderModule, .pName = "fragMain"};
 		vk::PipelineShaderStageCreateInfo shaderStages[] = {vertShaderStageInfo, fragShaerStageInfo};
+
+		// 버텍스 정보 입력
+		vk::PipelineVertexInputStateCreateInfo vertexInputInfo;
+		// 입력어셈블리 정보 입력
+		vk::PipelineInputAssemblyStateCreateInfo inputAssembly{.topology = vk::PrimitiveTopology::eTriangleList};
+		// 뷰포트와 가위 정보 입력 (정적)
+		vk::PipelineViewportStateCreateInfo viewportState{.viewportCount = 1, .scissorCount = 1};
+
+		// 레스터라이징 정보 입력
+		vk::PipelineRasterizationStateCreateInfo rasterizer{
+			.depthClampEnable		 = vk::False,
+			.rasterizerDiscardEnable = vk::False,
+			.polygonMode			 = vk::PolygonMode::eFill,
+			.cullMode				 = vk::CullModeFlagBits::eBack,
+			.frontFace				 = vk::FrontFace::eClockwise,
+			.lineWidth				 = 1.0f};
+
+		// 멀티샘플링 정보 입력 (안티앨리어싱)
+		vk::PipelineMultisampleStateCreateInfo multisampling{
+			.rasterizationSamples = vk::SampleCountFlagBits::e1, .sampleShadingEnable = vk::False};
+
+		// 연결된 프레임버퍼별 구성 설정
+		vk::PipelineColorBlendAttachmentState colorBlendAttachment{
+			.blendEnable	= vk::False,
+			.colorWriteMask = vk::ColorComponentFlagBits::eR | vk::ColorComponentFlagBits::eG |
+							  vk::ColorComponentFlagBits::eB | vk::ColorComponentFlagBits::eA};
+
+		// 색상 혼합 정보 설정
+		vk::PipelineColorBlendStateCreateInfo colorBlending{
+			.logicOpEnable	 = vk::False,
+			.logicOp		 = vk::LogicOp::eCopy,
+			.attachmentCount = 1,
+			.pAttachments	 = &colorBlendAttachment};
+
+		std::vector<vk::DynamicState> dynamicStates = {vk::DynamicState::eViewport, vk::DynamicState::eScissor};
+		vk::PipelineDynamicStateCreateInfo dynamicState{
+			.dynamicStateCount = static_cast<uint32_t>(dynamicStates.size()), .pDynamicStates = dynamicStates.data()};
+
+		vk::PipelineLayoutCreateInfo pipelineLayoutInfo{.setLayoutCount = 0, .pushConstantRangeCount = 0};
+		pipelineLayout = vk::raii::PipelineLayout(device, pipelineLayoutInfo);
+
 	}
 
 	static std::vector<char> readFile(const std::string& filename)
@@ -462,7 +504,7 @@ private:
 		return buffer;
 	}
 
-	[[nodiscard]] vk::raii::ShaderModule createShaerModule(const std::vector<char>& code) const
+	[[nodiscard]] vk::raii::ShaderModule createShaderModule(const std::vector<char>& code) const
 	{
 		vk::ShaderModuleCreateInfo createInfo{
 			.codeSize = code.size() * sizeof(char), .pCode = reinterpret_cast<const uint32_t*>(code.data())};
@@ -498,6 +540,8 @@ private:
 	vk::SurfaceFormatKHR swapChainSurfaceFormat;
 	vk::Extent2D swapChainExtent;
 	std::vector<vk::raii::ImageView> swapChainImageViews;
+
+	vk::raii::PipelineLayout pipelineLayout = nullptr;
 };
 
 int main()
